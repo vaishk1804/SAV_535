@@ -95,7 +95,6 @@ WriteResponse Cache::write(Address address, Word value, Stage stage)
   {
     hits_++;
 
-    // update cache line immediately for write-through policy
     line.data[off] = value;
     line.dirty = false;
 

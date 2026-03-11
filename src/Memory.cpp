@@ -43,8 +43,6 @@ MemoryResponse Memory::readLine(Address address, Stage stage)
     return {AccessStatus::WAIT, {}, "wait: started memory read request"};
   }
 
-  // Memory is busy with another stage or another address/type:
-  // lecture-aligned behavior is WAIT, not decrement.
   if (pending_.stage != stage ||
       pending_.type != AccessType::READ_LINE ||
       pending_.address != norm)
@@ -94,7 +92,6 @@ WriteResponse Memory::writeWord(Address address, Word value, Stage stage)
     return {AccessStatus::WAIT, "wait: started memory write request"};
   }
 
-  // Busy memory mismatch should return WAIT, not ERROR
   if (pending_.stage != stage ||
       pending_.type != AccessType::WRITE_WORD ||
       pending_.address != norm ||

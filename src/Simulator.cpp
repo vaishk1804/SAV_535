@@ -34,11 +34,8 @@ std::string Simulator::handleRead(Address address, Stage stage)
   else if (res.status == AccessStatus::DONE)
   {
     uint32_t off = (address % RAM_WORDS) % WORDS_PER_LINE;
-    oss << "done, line=["
-        << res.line.words[0] << ", "
-        << res.line.words[1] << ", "
-        << res.line.words[2] << ", "
-        << res.line.words[3] << "], requested_word=" << res.line.words[off];
+    oss << "done, line=" << lineToHexString(res.line)
+        << ", requested_word=" << wordToHex(res.line.words[off]);
   }
   else
   {
@@ -61,7 +58,7 @@ std::string Simulator::handleWrite(Word value, Address address, Stage stage)
 
   std::ostringstream oss;
   oss << "[cycle " << cycles_ << "] "
-      << "W " << value << " " << address << " " << stageToString(stage) << " -> ";
+      << "W " << wordToHex(value) << " " << address << " " << stageToString(stage) << " -> ";
 
   if (res.status == AccessStatus::WAIT)
   {
@@ -87,26 +84,23 @@ std::string Simulator::handleView(int level, uint32_t line) const
   if (level == 0)
   {
     auto ramLine = memory_.viewLine(line);
-    oss << "V 0 " << line << " -> RAM line " << line << " = ["
-        << ramLine.words[0] << ", "
-        << ramLine.words[1] << ", "
-        << ramLine.words[2] << ", "
-        << ramLine.words[3] << "]";
+    oss << "V 0 " << line << " -> RAM line " << line
+        << " = " << lineToHexString(ramLine);
     return oss.str();
   }
 
   if (level == 1)
   {
     const auto &c = cache_.viewLine(line);
+
+    LineData cacheLineData;
+    cacheLineData.words = c.data;
+
     oss << "V 1 " << line << " -> CACHE line " << (line % CACHE_LINES)
-        << " | tag=" << c.tag
+        << " | tag=" << wordToHex(static_cast<Word>(c.tag))
         << " valid=" << (c.valid ? 1 : 0)
         << " dirty=" << (c.dirty ? 1 : 0)
-        << " data=["
-        << c.data[0] << ", "
-        << c.data[1] << ", "
-        << c.data[2] << ", "
-        << c.data[3] << "]";
+        << " data=" << lineToHexString(cacheLineData);
     return oss.str();
   }
 

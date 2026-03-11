@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <iomanip>
+#include <sstream>
 
 using Word = int32_t;
 using Address = uint32_t;
@@ -89,3 +91,26 @@ struct PendingMemoryRequest
   Word writeValue = 0;
   int remaining = 0;
 };
+
+inline std::string wordToHex(Word value)
+{
+  std::ostringstream oss;
+  oss << "0x"
+      << std::uppercase
+      << std::hex
+      << std::setw(8)
+      << std::setfill('0')
+      << static_cast<uint32_t>(value);
+  return oss.str();
+}
+
+inline std::string lineToHexString(const LineData &line)
+{
+  std::ostringstream oss;
+  oss << "["
+      << wordToHex(line.words[0]) << ", "
+      << wordToHex(line.words[1]) << ", "
+      << wordToHex(line.words[2]) << ", "
+      << wordToHex(line.words[3]) << "]";
+  return oss.str();
+}
