@@ -1,20 +1,24 @@
 #include "MainWindow.h"
-
 #include <QComboBox>
 #include <QFileDialog>
 #include <QGridLayout>
-#include <QHeaderView>
+#include <QGroupBox>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QTableWidget>
-#include <QTableWidgetItem>
 #include <QVBoxLayout>
+#include <QFrame>
 #include <QWidget>
+#include <QFont>
+#include <QGraphicsDropShadowEffect>
+#include <QScrollArea>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
@@ -43,47 +47,211 @@ void MainWindow::buildUi()
     resetButton_ = new QPushButton("Reset");
 
     modeBox_ = new QComboBox();
-    modeBox_->addItems({"No Pipe / No Cache",
-                        "Cache Only",
-                        "Pipe Only",
-                        "Pipe + Cache"});
+    modeBox_->setStyleSheet(
+        "QComboBox { "
+        "   padding: 8px 12px; "
+        "   background-color: white; "
+        "   border: 2px solid #e0e0e0; "
+        "   border-radius: 8px; "
+        "   min-width: 220px; "
+        "   font-size: 13px; "
+        "   color: #2c3e50; "
+        "} "
+        "QComboBox:hover { border-color: #4A90E2; } "
+        "QComboBox:focus { border-color: #357ABD; } "
+        "QComboBox::drop-down { border: none; width: 30px; } "
+        "QComboBox QAbstractItemView { "
+        "   background-color: white; "
+        "   border: 2px solid #e0e0e0; "
+        "   selection-background-color: #4A90E2; "
+        "   selection-color: white; "
+        "   padding: 4px; "
+        "}");
+    modeBox_->addItems({"Mode 0: No Pipeline / No Cache",
+                        "Mode 1: Cache Only",
+                        "Mode 2: Pipeline Only",
+                        "Mode 3: Pipeline + Cache"});
+    modeBox_->setCurrentIndex(3);
 
-    top->addWidget(loadButton_);
-    top->addWidget(stepButton_);
-    top->addWidget(step10Button_);
-    top->addWidget(runButton_);
-    top->addWidget(runBpButton_);
-    top->addWidget(resetButton_);
-    top->addWidget(new QLabel("Mode:"));
-    top->addWidget(modeBox_);
-    root->addLayout(top);
+    auto *modeLabel = new QLabel("Execution Mode:");
+    modeLabel->setStyleSheet("QLabel { color: #2c3e50; font-size: 14px; font-weight: 600; background: transparent; }");
 
-    auto *bpRow = new QHBoxLayout();
-    breakpointEdit_ = new QLineEdit();
-    breakpointEdit_->setPlaceholderText("Breakpoint PC");
-    setBpButton_ = new QPushButton("Set BP");
-    clearBpButton_ = new QPushButton("Clear BP");
-    clearAllBpButton_ = new QPushButton("Clear All BPs");
+    controlLayout->addWidget(loadButton_);
+    controlLayout->addWidget(stepButton_);
+    controlLayout->addWidget(step10Button_);
+    controlLayout->addWidget(runButton_);
+    controlLayout->addWidget(runBpButton_);
+    controlLayout->addWidget(resetButton_);
+    controlLayout->addStretch();
+    controlLayout->addWidget(modeLabel);
+    controlLayout->addWidget(modeBox_);
 
-    memoryStartSpin_ = new QSpinBox();
-    memoryStartSpin_->setRange(0, static_cast<int>(RAM_WORDS - WORDS_PER_LINE));
-    memoryStartSpin_->setSingleStep(WORDS_PER_LINE);
-    memoryStartSpin_->setValue(0);
+    controlGroup->setLayout(controlLayout);
+    mainLayout->addWidget(controlGroup);
 
-    bpRow->addWidget(new QLabel("Breakpoint:"));
-    bpRow->addWidget(breakpointEdit_);
-    bpRow->addWidget(setBpButton_);
-    bpRow->addWidget(clearBpButton_);
-    bpRow->addWidget(clearAllBpButton_);
-    bpRow->addSpacing(20);
-    bpRow->addWidget(new QLabel("Memory start:"));
-    bpRow->addWidget(memoryStartSpin_);
-    root->addLayout(bpRow);
+    // ========== BREAKPOINT PANEL ==========
+    auto *bpGroup = new QGroupBox();
+    bpGroup->setStyleSheet(
+        "QGroupBox { "
+        "   background-color: white; "
+        "   border-radius: 12px; "
+        "   padding: 20px; "
+        "   border: 1px solid #e0e0e0; "
+        "}");
+    auto *bpLayout = new QHBoxLayout();
+    bpLayout->setSpacing(12);
 
-    auto *grid = new QGridLayout();
+    auto *bpLabel = new QLabel("Breakpoints:");
+    bpLabel->setStyleSheet("QLabel { color: #2c3e50; font-size: 14px; font-weight: 700; background: transparent; }");
 
+    bpAddressEdit_ = new QLineEdit();
+    bpAddressEdit_->setPlaceholderText("Enter address...");
+    bpAddressEdit_->setStyleSheet(
+        "QLineEdit { "
+        "   padding: 8px 12px; "
+        "   background-color: #f8f9fa; "
+        "   border: 2px solid #e0e0e0; "
+        "   border-radius: 8px; "
+        "   font-size: 13px; "
+        "   max-width: 160px; "
+        "   color: #2c3e50; "
+        "} "
+        "QLineEdit:focus { "
+        "   border-color: #4A90E2; "
+        "   background-color: white; "
+        "}");
+
+    QString bpButtonStyle =
+        "QPushButton { "
+        "   padding: 8px 16px; "
+        "   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+        "       stop:0 #51CF66, stop:1 #40C057); "
+        "   color: white; "
+        "   border: none; "
+        "   border-radius: 6px; "
+        "   font-size: 13px; "
+        "   font-weight: 600; "
+        "} "
+        "QPushButton:hover { "
+        "   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+        "       stop:0 #61DF76, stop:1 #51CF66); "
+        "}";
+
+    setBpButton_ = new QPushButton("➕ Set");
+    clearBpButton_ = new QPushButton("➖ Clear");
+    clearAllBpButton_ = new QPushButton("🗑 Clear All");
+
+    setBpButton_->setStyleSheet(bpButtonStyle);
+    clearBpButton_->setStyleSheet(bpButtonStyle);
+    clearAllBpButton_->setStyleSheet(bpButtonStyle);
+
+    bpList_ = new QListWidget();
+    bpList_->setMaximumHeight(50);
+    bpList_->setStyleSheet(
+        "QListWidget { "
+        "   background-color: #f8f9fa; "
+        "   border: 2px solid #e0e0e0; "
+        "   border-radius: 8px; "
+        "   padding: 6px; "
+        "   font-size: 13px; "
+        "   color: #1d1d1f; "
+        "} "
+        "QListWidget::item { "
+        "   color: #1d1d1f; "
+        "}");
+
+    bpLayout->addWidget(bpLabel);
+    bpLayout->addWidget(bpAddressEdit_);
+    bpLayout->addWidget(setBpButton_);
+    bpLayout->addWidget(clearBpButton_);
+    bpLayout->addWidget(clearAllBpButton_);
+    bpLayout->addWidget(bpList_, 1);
+
+    bpGroup->setLayout(bpLayout);
+    mainLayout->addWidget(bpGroup);
+
+    // ========== STATE DISPLAY GRID ==========
+    auto *gridLayout = new QGridLayout();
+    gridLayout->setSpacing(16);
+
+    // Shared styles for uniform panel cards
+    QString panelFrameStyle =
+        "QFrame {"
+        "   background-color: white;"
+        "   border-radius: 12px;"
+        "   border: 1px solid #e0e0e0;"
+        "}";
+    QString panelHeaderStyle =
+        "QWidget {"
+        "   background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #667eea, stop:1 #764ba2);"
+        "   border-top-left-radius: 10px;"
+        "   border-top-right-radius: 10px;"
+        "}";
+    QString panelTitleStyle =
+        "QLabel { color: white; font-size: 14px; font-weight: 700; background: transparent; }";
+
+    auto makePanelFrame = [&](const QString &title) -> std::pair<QFrame *, QVBoxLayout *>
+    {
+        auto *frame = new QFrame();
+        frame->setStyleSheet(panelFrameStyle);
+        auto *vbox = new QVBoxLayout();
+        vbox->setSpacing(8);
+        vbox->setContentsMargins(0, 0, 0, 16);
+        auto *header = new QWidget();
+        header->setStyleSheet(panelHeaderStyle);
+        auto *hdr = new QHBoxLayout(header);
+        hdr->setContentsMargins(16, 10, 16, 10);
+        auto *lbl = new QLabel(title);
+        lbl->setStyleSheet(panelTitleStyle);
+        hdr->addWidget(lbl);
+        hdr->addStretch();
+        vbox->addWidget(header);
+        return {frame, vbox};
+    };
+
+    auto wrapContent = [](QWidget *w, QVBoxLayout *vbox, int l = 16, int t = 4, int r = 16, int b = 0)
+    {
+        auto *wrapper = new QWidget();
+        auto *wl = new QVBoxLayout(wrapper);
+        wl->setContentsMargins(l, t, r, b);
+        wl->addWidget(w);
+        vbox->addWidget(wrapper);
+    };
+
+    QString tableStyle =
+        "QTableWidget { "
+        "   background-color: #fafbfc; "
+        "   border: none; "
+        "   gridline-color: #e1e4e8; "
+        "   font-size: 13px; "
+        "   color: #24292e; "
+        "   selection-background-color: #0366d6; "
+        "   selection-color: white; "
+        "} "
+        "QTableWidget::item { "
+        "   padding: 6px; "
+        "   color: #24292e; "
+        "} "
+        "QTableWidget::item:selected { "
+        "   background-color: #0366d6; "
+        "   color: white; "
+        "} "
+        "QHeaderView::section { "
+        "   background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
+        "       stop:0 #f6f8fa, stop:1 #e1e4e8); "
+        "   padding: 8px; "
+        "   border: none; "
+        "   border-bottom: 2px solid #d1d5da; "
+        "   border-right: 1px solid #e1e4e8; "
+        "   font-size: 12px; "
+        "   font-weight: 700; "
+        "   color: #586069; "
+        "}";
+
+    // Registers
+    auto [regGroup, regLayout] = makePanelFrame("\U0001F4CB  Registers");
     regTable_ = new QTableWidget(16, 2);
-    regTable_->setHorizontalHeaderLabels({"Reg", "Value"});
+    regTable_->setHorizontalHeaderLabels({"Register", "Value"});
     regTable_->horizontalHeader()->setStretchLastSection(true);
     regTable_->verticalHeader()->setVisible(false);
     regTable_->setAlternatingRowColors(true);
@@ -95,7 +263,7 @@ void MainWindow::buildUi()
     pipelineView_->setLineWrapMode(QPlainTextEdit::NoWrap);
 
     l1Table_ = new QTableWidget(L1_NUM_LINES, 5);
-    l1Table_->setHorizontalHeaderLabels({"Idx", "Valid", "Tag", "Dirty", "Data"});
+    l1Table_->setHorizontalHeaderLabels({"Index", "Valid", "Tag", "Dirty", "Data [4 words]"});
     l1Table_->horizontalHeader()->setStretchLastSection(true);
     l1Table_->verticalHeader()->setVisible(false);
     l1Table_->setMinimumWidth(720);
@@ -103,14 +271,14 @@ void MainWindow::buildUi()
     l1Table_->verticalHeader()->setDefaultSectionSize(24);
 
     l2Table_ = new QTableWidget(L2_NUM_LINES, 5);
-    l2Table_->setHorizontalHeaderLabels({"Idx", "Valid", "Tag", "Dirty", "Data"});
+    l2Table_->setHorizontalHeaderLabels({"Index", "Valid", "Tag", "Dirty", "Data [4 words]"});
     l2Table_->horizontalHeader()->setStretchLastSection(true);
     l2Table_->verticalHeader()->setVisible(false);
     l2Table_->setAlternatingRowColors(true);
     l2Table_->verticalHeader()->setDefaultSectionSize(24);
 
     memTable_ = new QTableWidget(16, 2);
-    memTable_->setHorizontalHeaderLabels({"Base", "Words"});
+    memTable_->setHorizontalHeaderLabels({"Address", "Data [4 words]"});
     memTable_->horizontalHeader()->setStretchLastSection(true);
     memTable_->verticalHeader()->setVisible(false);
     memTable_->setAlternatingRowColors(true);
@@ -134,7 +302,22 @@ void MainWindow::buildUi()
     root->addLayout(grid);
 
     statusLabel_ = new QLabel();
-    root->addWidget(statusLabel_);
+#ifdef Q_OS_MAC
+    QFont statusFont("Menlo", 12, QFont::Medium);
+#else
+    QFont statusFont("Consolas", 12, QFont::Medium);
+#endif
+    statusLabel_->setFont(statusFont);
+    statusLabel_->setStyleSheet(
+        "QLabel { "
+        "   background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
+        "       stop:0 #2c3e50, stop:1 #34495e); "
+        "   color: #ecf0f1; "
+        "   padding: 14px 20px; "
+        "   border-radius: 10px; "
+        "   border: 2px solid #1a252f; "
+        "}");
+    mainLayout->addWidget(statusLabel_);
 
     setCentralWidget(central);
     resize(1550, 920);
@@ -212,21 +395,30 @@ void MainWindow::buildUi()
     connect(runBpButton_, &QPushButton::clicked, this, &MainWindow::onRunToBreakpoint);
     connect(resetButton_, &QPushButton::clicked, this, &MainWindow::onReset);
     connect(modeBox_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::onModeChanged);
-
     connect(setBpButton_, &QPushButton::clicked, this, &MainWindow::onSetBreakpoint);
     connect(clearBpButton_, &QPushButton::clicked, this, &MainWindow::onClearBreakpoint);
     connect(clearAllBpButton_, &QPushButton::clicked, this, &MainWindow::onClearAllBreakpoints);
-
-    connect(memoryStartSpin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::onMemoryStartChanged);
+    connect(memStartSpin_, QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::onMemoryStartChanged);
 }
 
 void MainWindow::refreshView()
 {
-    auto snap = sim_.getSnapshot(static_cast<uint32_t>(memoryStartSpin_->value()), 16);
+    auto snap = sim_.getSnapshot(memStartSpin_ ? memStartSpin_->value() : 0, 16);
 
+    // Update registers
     for (int i = 0; i < 16; ++i)
     {
-        regTable_->setItem(i, 0, new QTableWidgetItem(QString("R%1").arg(i)));
+        QString regName;
+        if (i == 0)
+            regName = "R0 (zero)";
+        else if (i == 14)
+            regName = "R14 (SP)";
+        else if (i == 15)
+            regName = "R15 (RA)";
+        else
+            regName = QString("R%1").arg(i);
+
+        regTable_->setItem(i, 0, new QTableWidgetItem(regName));
         regTable_->setItem(i, 1, new QTableWidgetItem(QString::number(snap.regs[i])));
     }
 
@@ -256,52 +448,53 @@ void MainWindow::refreshView()
 
     pipelineView_->setPlainText(pipe);
 
-    l1Table_->setRowCount(static_cast<int>(snap.l1Rows.size()));
-    for (int i = 0; i < static_cast<int>(snap.l1Rows.size()); ++i)
+    // Update L1 cache
+    for (size_t i = 0; i < snap.l1Rows.size(); ++i)
     {
         const auto &r = snap.l1Rows[i];
         QString data = QString("%1 %2 %3 %4")
-                           .arg(QString("0x%1").arg(r.data[0], 8, 16, QChar('0')))
-                           .arg(QString("0x%1").arg(r.data[1], 8, 16, QChar('0')))
-                           .arg(QString("0x%1").arg(r.data[2], 8, 16, QChar('0')))
-                           .arg(QString("0x%1").arg(r.data[3], 8, 16, QChar('0')));
+                           .arg(r.data[0], 8, 16, QChar('0'))
+                           .arg(r.data[1], 8, 16, QChar('0'))
+                           .arg(r.data[2], 8, 16, QChar('0'))
+                           .arg(r.data[3], 8, 16, QChar('0'));
 
         l1Table_->setItem(i, 0, new QTableWidgetItem(QString::number(r.index)));
-        l1Table_->setItem(i, 1, new QTableWidgetItem(r.valid ? "1" : "0"));
-        l1Table_->setItem(i, 2, new QTableWidgetItem(QString::number(r.tag)));
-        l1Table_->setItem(i, 3, new QTableWidgetItem(r.dirty ? "1" : "0"));
-        l1Table_->setItem(i, 4, new QTableWidgetItem(data));
+        l1Table_->setItem(i, 1, new QTableWidgetItem(r.valid ? "✓" : "✗"));
+        l1Table_->setItem(i, 2, new QTableWidgetItem(QString::number(r.tag, 16).toUpper()));
+        l1Table_->setItem(i, 3, new QTableWidgetItem(r.dirty ? "✓" : "✗"));
+        l1Table_->setItem(i, 4, new QTableWidgetItem(data.toUpper()));
     }
 
-    l2Table_->setRowCount(static_cast<int>(snap.l2Rows.size()));
-    for (int i = 0; i < static_cast<int>(snap.l2Rows.size()); ++i)
+    // Update L2 cache
+    for (size_t i = 0; i < snap.l2Rows.size(); ++i)
     {
         const auto &r = snap.l2Rows[i];
         QString data = QString("%1 %2 %3 %4")
-                           .arg(QString("0x%1").arg(r.data[0], 8, 16, QChar('0')))
-                           .arg(QString("0x%1").arg(r.data[1], 8, 16, QChar('0')))
-                           .arg(QString("0x%1").arg(r.data[2], 8, 16, QChar('0')))
-                           .arg(QString("0x%1").arg(r.data[3], 8, 16, QChar('0')));
+                           .arg(r.data[0], 8, 16, QChar('0'))
+                           .arg(r.data[1], 8, 16, QChar('0'))
+                           .arg(r.data[2], 8, 16, QChar('0'))
+                           .arg(r.data[3], 8, 16, QChar('0'));
 
         l2Table_->setItem(i, 0, new QTableWidgetItem(QString::number(r.index)));
-        l2Table_->setItem(i, 1, new QTableWidgetItem(r.valid ? "1" : "0"));
-        l2Table_->setItem(i, 2, new QTableWidgetItem(QString::number(r.tag)));
-        l2Table_->setItem(i, 3, new QTableWidgetItem(r.dirty ? "1" : "0"));
-        l2Table_->setItem(i, 4, new QTableWidgetItem(data));
+        l2Table_->setItem(i, 1, new QTableWidgetItem(r.valid ? "✓" : "✗"));
+        l2Table_->setItem(i, 2, new QTableWidgetItem(QString::number(r.tag, 16).toUpper()));
+        l2Table_->setItem(i, 3, new QTableWidgetItem(r.dirty ? "✓" : "✗"));
+        l2Table_->setItem(i, 4, new QTableWidgetItem(data.toUpper()));
     }
 
+    // Update memory
     memTable_->setRowCount(static_cast<int>(snap.memoryRows.size()));
-    for (int i = 0; i < static_cast<int>(snap.memoryRows.size()); ++i)
+    for (size_t i = 0; i < snap.memoryRows.size(); ++i)
     {
         const auto &r = snap.memoryRows[i];
         QString data = QString("%1 %2 %3 %4")
-                           .arg(QString("0x%1").arg(r.data[0], 8, 16, QChar('0')))
-                           .arg(QString("0x%1").arg(r.data[1], 8, 16, QChar('0')))
-                           .arg(QString("0x%1").arg(r.data[2], 8, 16, QChar('0')))
-                           .arg(QString("0x%1").arg(r.data[3], 8, 16, QChar('0')));
+                           .arg(r.data[0], 8, 16, QChar('0'))
+                           .arg(r.data[1], 8, 16, QChar('0'))
+                           .arg(r.data[2], 8, 16, QChar('0'))
+                           .arg(r.data[3], 8, 16, QChar('0'));
 
         memTable_->setItem(i, 0, new QTableWidgetItem(QString::number(r.baseAddress)));
-        memTable_->setItem(i, 1, new QTableWidgetItem(data));
+        memTable_->setItem(i, 1, new QTableWidgetItem(data.toUpper()));
     }
 
     statusLabel_->setText(
@@ -320,7 +513,11 @@ void MainWindow::refreshView()
 
 void MainWindow::onLoadAsm()
 {
-    const auto file = QFileDialog::getOpenFileName(this, "Load ASM", QString(), "Assembly (*.asm *.txt)");
+    QString file = QFileDialog::getOpenFileName(
+        this,
+        "Load Assembly Program",
+        "../demo",
+        "Assembly Files (*.asm *.txt);;All Files (*)");
     if (file.isEmpty())
         return;
 
@@ -328,10 +525,11 @@ void MainWindow::onLoadAsm()
     {
         sim_.loadProgramAsm(file.toStdString());
         refreshView();
+        QMessageBox::information(this, "Success", "Program loaded successfully!");
     }
     catch (const std::exception &e)
     {
-        QMessageBox::critical(this, "Load failed", e.what());
+        QMessageBox::critical(this, "Load Error", QString("Failed to load program:\n%1").arg(e.what()));
     }
 }
 
@@ -353,20 +551,33 @@ void MainWindow::onStep10()
 
 void MainWindow::onRun()
 {
-    sim_.run();
+    QString result = QString::fromStdString(sim_.run());
     refreshView();
+    if (result.contains("HALTED"))
+    {
+        QMessageBox::information(this, "Execution Complete", "Program halted successfully!");
+    }
 }
 
 void MainWindow::onRunToBreakpoint()
 {
-    sim_.runUntilBreakpoint();
+    QString msg = QString::fromStdString(sim_.runUntilBreakpoint());
     refreshView();
+    if (msg.contains("breakpoint", Qt::CaseInsensitive))
+    {
+        QMessageBox::information(this, "Breakpoint Hit", msg);
+    }
+    else if (msg.contains("HALTED"))
+    {
+        QMessageBox::information(this, "Execution Complete", "Program halted before hitting breakpoint");
+    }
 }
 
 void MainWindow::onReset()
 {
     sim_.reset();
     refreshView();
+    QMessageBox::information(this, "Reset", "Simulator reset to initial state");
 }
 
 void MainWindow::onModeChanged(int index)
@@ -378,27 +589,37 @@ void MainWindow::onModeChanged(int index)
 void MainWindow::onSetBreakpoint()
 {
     bool ok = false;
-    const uint32_t addr = breakpointEdit_->text().toUInt(&ok);
-    if (!ok)
+    uint32_t addr = bpAddressEdit_->text().toUInt(&ok);
+    if (ok)
     {
-        QMessageBox::warning(this, "Breakpoint", "Enter a valid numeric PC.");
-        return;
+        sim_.addBreakpoint(addr);
+        bpAddressEdit_->clear();
+        refreshView();
     }
-    sim_.addBreakpoint(addr);
-    refreshView();
+    else
+    {
+        QMessageBox::warning(this, "Invalid Input", "Please enter a valid address number");
+    }
 }
 
 void MainWindow::onClearBreakpoint()
 {
-    bool ok = false;
-    const uint32_t addr = breakpointEdit_->text().toUInt(&ok);
-    if (!ok)
+    auto selected = bpList_->selectedItems();
+    if (!selected.isEmpty())
     {
-        QMessageBox::warning(this, "Breakpoint", "Enter a valid numeric PC.");
-        return;
+        QString text = selected[0]->text();
+        QStringList parts = text.split(" ");
+        if (parts.size() >= 3)
+        {
+            uint32_t addr = parts[2].toUInt();
+            sim_.clearBreakpoint(addr);
+            refreshView();
+        }
     }
-    sim_.clearBreakpoint(addr);
-    refreshView();
+    else
+    {
+        QMessageBox::information(this, "No Selection", "Please select a breakpoint to clear");
+    }
 }
 
 void MainWindow::onClearAllBreakpoints()
@@ -407,7 +628,8 @@ void MainWindow::onClearAllBreakpoints()
     refreshView();
 }
 
-void MainWindow::onMemoryStartChanged(int)
+void MainWindow::onMemoryStartChanged(int value)
 {
+    (void)value;
     refreshView();
 }
