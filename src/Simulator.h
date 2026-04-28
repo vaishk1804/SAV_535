@@ -128,6 +128,8 @@ private:
     uint32_t programSize_ = 0;
     ExecMode mode_ = ExecMode::PIPE_CACHE;
 
+    std::vector<uint32_t> loadedProgramWords_;
+
     PipeReg IF_, ID_, EX_, MEM_, WB_;
 
     struct HierarchyPort
@@ -230,4 +232,6 @@ private:
     bool pcInLoadedProgram(uint32_t pc) const;
     uint32_t programEnd() const;
     void fault(const std::string &message);
+
+    bool cachesEnabledForCurrentMode() const;
 };

@@ -127,8 +127,15 @@ void Simulator::fault(const std::string &message)
     faultMessage_ = message;
 }
 
+bool Simulator::cachesEnabledForCurrentMode() const
+{
+    return mode_ == ExecMode::NO_PIPE_CACHE || mode_ == ExecMode::PIPE_CACHE;
+}
+
 std::string Simulator::loadProgramWords(const std::vector<uint32_t> &words)
 {
+    loadedProgramWords_ = words;
+
     reset();
     programBase_ = 0;
     programSize_ = static_cast<uint32_t>(words.size());
@@ -153,7 +160,17 @@ std::string Simulator::loadProgramAsm(const std::string &filename)
 void Simulator::setMode(ExecMode mode)
 {
     mode_ = mode;
-    lastSummary_ = "Mode set";
+
+    if (!loadedProgramWords_.empty())
+    {
+        auto saved = loadedProgramWords_;
+        loadProgramWords(saved);
+        lastSummary_ = "Mode set and program reloaded";
+    }
+    else
+    {
+        lastSummary_ = "Mode set";
+    }
 }
 
 void Simulator::addBreakpoint(uint32_t addr)
@@ -1392,39 +1409,63 @@ SimulatorSnapshot Simulator::getSnapshot(uint32_t memStart, uint32_t memLines) c
         s.fetchRemaining = hierarchyPort_.remaining;
     }
 
-    s.l1Hits = l1_.hits();
-    s.l1Misses = l1_.misses();
-    s.l2Hits = l2_.hits();
-    s.l2Misses = l2_.misses();
-
-    for (uint32_t i = 0; i < L1_NUM_LINES; ++i)
+    if (cachesEnabledForCurrentMode())
     {
-        SnapshotCacheRow row;
-        row.index = i;
-        const auto *line = l1_.getLine(i);
-        if (line)
+        s.l1Hits = l1_.hits();
+        s.l1Misses = l1_.misses();
+        s.l2Hits = l2_.hits();
+        s.l2Misses = l2_.misses();
+
+        for (uint32_t i = 0; i < L1_NUM_LINES; ++i)
         {
-            row.valid = line->valid;
-            row.dirty = line->dirty;
-            row.tag = line->tag;
-            row.data = line->data.words;
+            SnapshotCacheRow row;
+            row.index = i;
+            const auto *line = l1_.getLine(i);
+            if (line)
+            {
+                row.valid = line->valid;
+                row.dirty = line->dirty;
+                row.tag = line->tag;
+                row.data = line->data.words;
+            }
+            s.l1Rows.push_back(row);
         }
-        s.l1Rows.push_back(row);
+
+        for (uint32_t i = 0; i < L2_NUM_LINES; ++i)
+        {
+            SnapshotCacheRow row;
+            row.index = i;
+            const auto *line = l2_.getLine(i);
+            if (line)
+            {
+                row.valid = line->valid;
+                row.dirty = line->dirty;
+                row.tag = line->tag;
+                row.data = line->data.words;
+            }
+            s.l2Rows.push_back(row);
+        }
     }
-
-    for (uint32_t i = 0; i < L2_NUM_LINES; ++i)
+    else
     {
-        SnapshotCacheRow row;
-        row.index = i;
-        const auto *line = l2_.getLine(i);
-        if (line)
+        s.l1Hits = 0;
+        s.l1Misses = 0;
+        s.l2Hits = 0;
+        s.l2Misses = 0;
+
+        for (uint32_t i = 0; i < L1_NUM_LINES; ++i)
         {
-            row.valid = line->valid;
-            row.dirty = line->dirty;
-            row.tag = line->tag;
-            row.data = line->data.words;
+            SnapshotCacheRow row;
+            row.index = i;
+            s.l1Rows.push_back(row);
         }
-        s.l2Rows.push_back(row);
+
+        for (uint32_t i = 0; i < L2_NUM_LINES; ++i)
+        {
+            SnapshotCacheRow row;
+            row.index = i;
+            s.l2Rows.push_back(row);
+        }
     }
 
     for (uint32_t i = 0; i < memLines; ++i)
