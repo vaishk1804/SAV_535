@@ -27,6 +27,13 @@ void MainWindow::buildUi()
     auto *central = new QWidget(this);
     auto *root = new QVBoxLayout(central);
 
+    auto *title = new QLabel("SAV_535 ISA Simulator");
+    QFont titleFont = title->font();
+    titleFont.setPointSize(16);
+    titleFont.setBold(true);
+    title->setFont(titleFont);
+    root->addWidget(title);
+
     auto *top = new QHBoxLayout();
     loadButton_ = new QPushButton("Load ASM");
     stepButton_ = new QPushButton("Step");
@@ -79,26 +86,35 @@ void MainWindow::buildUi()
     regTable_->setHorizontalHeaderLabels({"Reg", "Value"});
     regTable_->horizontalHeader()->setStretchLastSection(true);
     regTable_->verticalHeader()->setVisible(false);
+    regTable_->setAlternatingRowColors(true);
+    regTable_->verticalHeader()->setDefaultSectionSize(26);
 
     pipelineView_ = new QPlainTextEdit();
     pipelineView_->setReadOnly(true);
-    pipelineView_->setMinimumHeight(240);
+    pipelineView_->setMinimumHeight(260);
+    pipelineView_->setLineWrapMode(QPlainTextEdit::NoWrap);
 
     l1Table_ = new QTableWidget(L1_NUM_LINES, 5);
     l1Table_->setHorizontalHeaderLabels({"Idx", "Valid", "Tag", "Dirty", "Data"});
     l1Table_->horizontalHeader()->setStretchLastSection(true);
     l1Table_->verticalHeader()->setVisible(false);
     l1Table_->setMinimumWidth(720);
+    l1Table_->setAlternatingRowColors(true);
+    l1Table_->verticalHeader()->setDefaultSectionSize(24);
 
     l2Table_ = new QTableWidget(L2_NUM_LINES, 5);
     l2Table_->setHorizontalHeaderLabels({"Idx", "Valid", "Tag", "Dirty", "Data"});
     l2Table_->horizontalHeader()->setStretchLastSection(true);
     l2Table_->verticalHeader()->setVisible(false);
+    l2Table_->setAlternatingRowColors(true);
+    l2Table_->verticalHeader()->setDefaultSectionSize(24);
 
     memTable_ = new QTableWidget(16, 2);
     memTable_->setHorizontalHeaderLabels({"Base", "Words"});
     memTable_->horizontalHeader()->setStretchLastSection(true);
     memTable_->verticalHeader()->setVisible(false);
+    memTable_->setAlternatingRowColors(true);
+    memTable_->verticalHeader()->setDefaultSectionSize(24);
 
     grid->addWidget(new QLabel("Registers"), 0, 0);
     grid->addWidget(regTable_, 1, 0);
@@ -123,6 +139,71 @@ void MainWindow::buildUi()
     setCentralWidget(central);
     resize(1550, 920);
     setWindowTitle("SAV_535 Simulator");
+
+    setStyleSheet(R"(
+        QMainWindow, QWidget {
+            background-color: #f4efff;
+            color: #24183a;
+            font-size: 13px;
+        }
+
+        QLabel {
+            color: #2f1f4f;
+            font-weight: 600;
+        }
+
+        QPushButton {
+            background-color: #7c5ac9;
+            color: white;
+            border: 1px solid #6747b3;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-weight: 600;
+        }
+
+        QPushButton:hover {
+            background-color: #6d4fc0;
+        }
+
+        QPushButton:pressed {
+            background-color: #5f43ad;
+        }
+
+        QComboBox, QLineEdit, QSpinBox {
+            background-color: white;
+            color: #24183a;
+            border: 1px solid #c9b8ee;
+            border-radius: 6px;
+            padding: 4px 6px;
+        }
+
+        QPlainTextEdit {
+            background-color: #fffaff;
+            color: #231733;
+            border: 1px solid #ccbdf0;
+            border-radius: 8px;
+            padding: 8px;
+            font-family: Consolas, 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        QTableWidget {
+            background-color: white;
+            alternate-background-color: #f7f2ff;
+            color: #24183a;
+            gridline-color: #d9cdf4;
+            border: 1px solid #ccbdf0;
+            border-radius: 8px;
+        }
+
+        QHeaderView::section {
+            background-color: #d8c8f7;
+            color: #2a1d45;
+            padding: 6px;
+            border: 1px solid #c6b4ee;
+            font-weight: 700;
+        }
+    )");
 
     connect(loadButton_, &QPushButton::clicked, this, &MainWindow::onLoadAsm);
     connect(stepButton_, &QPushButton::clicked, this, &MainWindow::onStep);
@@ -163,10 +244,15 @@ void MainWindow::refreshView()
         "EX  : " + QString::fromStdString(snap.exStage) + "\n" +
         "MEM : " + QString::fromStdString(snap.memStage) + "\n" +
         "WB  : " + QString::fromStdString(snap.wbStage) + "\n\n" +
-        "Summary: " + QString::fromStdString(snap.summary) + "\n" +
-        "Flags  : " + QString::fromStdString(snap.flags) + "\n" +
-        QString::fromStdString(snap.hierarchyState) + "\n" +
-        QString::fromStdString(snap.seqState);
+        "Summary   : " + QString::fromStdString(snap.summary) + "\n" +
+        "Flags     : " + QString::fromStdString(snap.flags) + "\n" +
+        "Hierarchy : " + QString::fromStdString(snap.hierarchyState) + "\n" +
+        "Sequential: " + QString::fromStdString(snap.seqState) + "\n";
+
+    if (snap.mode == "NO_PIPE_NO_CACHE" || snap.mode == "NO_PIPE_CACHE")
+    {
+        pipe += "\nNote: Sequential mode active, pipeline registers are expected to be mostly inactive.";
+    }
 
     pipelineView_->setPlainText(pipe);
 
@@ -219,11 +305,12 @@ void MainWindow::refreshView()
     }
 
     statusLabel_->setText(
-        QString("PC=%1  Cycles=%2  Halted=%3  HaltRequested=%4  Z=%5  L1 H/M=%6/%7  L2 H/M=%8/%9")
+        QString("PC=%1  Cycles=%2  Halted=%3  HaltRequested=%4  Faulted=%5  Z=%6  L1 H/M=%7/%8  L2 H/M=%9/%10")
             .arg(snap.pc)
             .arg(snap.cycles)
             .arg(snap.halted ? "yes" : "no")
             .arg(snap.haltRequested ? "yes" : "no")
+            .arg(snap.faulted ? "yes" : "no")
             .arg(snap.zFlag ? "1" : "0")
             .arg(snap.l1Hits)
             .arg(snap.l1Misses)
@@ -258,7 +345,7 @@ void MainWindow::onStep10()
 {
     for (int i = 0; i < 10; ++i)
     {
-        if (sim_.step() == "HALTED")
+        if (sim_.step() == "HALTED" || sim_.step() == "FAULT")
             break;
     }
     refreshView();
