@@ -67,7 +67,7 @@ int main()
         }
         else if (cmd == "RUN")
         {
-            uint64_t n = 500000;
+            uint64_t n = 700000;
             iss >> n;
             std::cout << sim.run(n) << "\n";
             std::cout << sim.handleStatus();

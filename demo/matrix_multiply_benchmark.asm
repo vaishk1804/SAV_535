@@ -1,88 +1,131 @@
 # Matrix Multiply Benchmark
-# 2x2 matrix multiply: C = A x B
+# 7x7 matrices
 #
-# A at 300..303:
-# [1 2
-#  3 4]
+# A at 300..348 : values 1..49
+# B at 400..448 : all ones
+# C at 500..548 : result
+# Checksum of C stored at memory[700] = 8575
 #
-# B at 310..313:
-# [5 6
-#  7 8]
+# Total working set = 49 + 49 + 49 = 147 words > L2 capacity of 128 words
 #
-# Expected C at 320..323:
-# [19 22
-#  43 50]
+# Address formula uses row*7.
+# Since there is no MUL-immediate, row*7 is computed as:
+# row*7 = (row << 3) - row
 
 main:
-    ADDI R10, R0, 300
-    ADDI R11, R0, 310
-    ADDI R12, R0, 320
+    ADDI R10, R0, 300      # A base
+    ADDI R11, R0, 400      # B base
+    ADDI R12, R0, 500      # C base
+    ADDI R13, R0, 7        # N = 7
+    ADDI R14, R0, 49       # total elements = 49
+    ADDI R15, R0, 3        # shift amount for *8
 
-    ADDI R1, R0, 1
-    SW   R1, R10, 0
-    ADDI R1, R0, 2
-    SW   R1, R10, 1
-    ADDI R1, R0, 3
-    SW   R1, R10, 2
-    ADDI R1, R0, 4
-    SW   R1, R10, 3
+# ---------------- Initialize A = 1..49 ----------------
+    ADDI R1, R0, 0         # idx = 0
+    ADDI R2, R0, 1         # value = 1
+    ADD  R3, R10, R0       # ptr = A base
 
-    ADDI R1, R0, 5
-    SW   R1, R11, 0
-    ADDI R1, R0, 6
-    SW   R1, R11, 1
-    ADDI R1, R0, 7
-    SW   R1, R11, 2
-    ADDI R1, R0, 8
-    SW   R1, R11, 3
+init_a_loop:
+    BLT  R1, R14, init_a_body
+    BEQ  R0, R0, init_b_start
 
-    ADDI R1, R0, 0
+init_a_body:
+    SW   R2, R3, 0
+    ADDI R3, R3, 1
+    ADDI R2, R2, 1
+    ADDI R1, R1, 1
+    BEQ  R0, R0, init_a_loop
+
+# ---------------- Initialize B = all ones ----------------
+init_b_start:
+    ADDI R1, R0, 0         # idx = 0
+    ADDI R2, R0, 1         # constant one
+    ADD  R3, R11, R0       # ptr = B base
+
+init_b_loop:
+    BLT  R1, R14, init_b_body
+    BEQ  R0, R0, multiply_start
+
+init_b_body:
+    SW   R2, R3, 0
+    ADDI R3, R3, 1
+    ADDI R1, R1, 1
+    BEQ  R0, R0, init_b_loop
+
+# ---------------- Matrix multiply C = A x B ----------------
+multiply_start:
+    ADDI R1, R0, 0         # i = 0
 
 outer_i:
-    ADDI R13, R0, 2
     BLT  R1, R13, body_i
-    HALT
+    BEQ  R0, R0, checksum_start
 
 body_i:
-    ADDI R2, R0, 0
+    ADDI R2, R0, 0         # j = 0
 
 outer_j:
-    ADDI R13, R0, 2
     BLT  R2, R13, body_j
     ADDI R1, R1, 1
     BEQ  R0, R0, outer_i
 
 body_j:
-    ADDI R3, R0, 0
-    ADDI R4, R0, 0
+    ADDI R4, R0, 0         # sum = 0
+    ADDI R3, R0, 0         # k = 0
 
 inner_k:
-    ADDI R13, R0, 2
-    BLT  R4, R13, multiply_step
+    BLT  R3, R13, multiply_step
     BEQ  R0, R0, store_c
 
 multiply_step:
-    ADD  R5, R1, R1
+    # addrA = A + (i*7) + k
+    SLL  R5, R1, R15       # i*8
+    SUB  R5, R5, R1        # i*7
     ADD  R6, R10, R5
-    ADD  R6, R6, R4
-    LW   R7, R6, 0
+    ADD  R6, R6, R3
+    LW   R7, R6, 0         # a
 
-    ADD  R8, R4, R4
-    ADD  R9, R11, R8
-    ADD  R9, R9, R2
-    LW   R13, R9, 0
+    # addrB = B + (k*7) + j
+    SLL  R5, R3, R15       # k*8
+    SUB  R5, R5, R3        # k*7
+    ADD  R6, R11, R5
+    ADD  R6, R6, R2
+    LW   R8, R6, 0         # b
 
-    MUL  R14, R7, R13
-    ADD  R3, R3, R14
+    MUL  R9, R7, R8
+    ADD  R4, R4, R9
 
-    ADDI R4, R4, 1
+    ADDI R3, R3, 1
     BEQ  R0, R0, inner_k
 
 store_c:
-    ADD  R5, R1, R1
+    # addrC = C + (i*7) + j
+    SLL  R5, R1, R15       # i*8
+    SUB  R5, R5, R1        # i*7
     ADD  R6, R12, R5
     ADD  R6, R6, R2
-    SW   R3, R6, 0
+    SW   R4, R6, 0
 
     ADDI R2, R2, 1
     BEQ  R0, R0, outer_j
+
+# ---------------- Checksum of output matrix ----------------
+checksum_start:
+    ADDI R1, R0, 0         # idx = 0
+    ADDI R4, R0, 0         # checksum = 0
+    ADD  R6, R12, R0       # ptr = C base
+
+checksum_loop:
+    BLT  R1, R14, checksum_body
+    BEQ  R0, R0, finish
+
+checksum_body:
+    LW   R7, R6, 0
+    ADD  R4, R4, R7
+    ADDI R6, R6, 1
+    ADDI R1, R1, 1
+    BEQ  R0, R0, checksum_loop
+
+finish:
+    ADDI R5, R0, 700
+    SW   R4, R5, 0
+    HALT
