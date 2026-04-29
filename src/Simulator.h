@@ -93,8 +93,8 @@ public:
     ExecMode mode() const { return mode_; }
 
     std::string step();
-    std::string run(uint64_t maxCycles = 500000);
-    std::string runUntilBreakpoint(uint64_t maxCycles = 500000);
+    std::string run(uint64_t maxCycles = 800000);
+    std::string runUntilBreakpoint(uint64_t maxCycles = 800000);
 
     void addBreakpoint(uint32_t addr);
     void clearBreakpoint(uint32_t addr);

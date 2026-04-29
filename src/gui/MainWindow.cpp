@@ -1,5 +1,5 @@
 #include "MainWindow.h"
-
+#include <QApplication>
 #include <QComboBox>
 #include <QFileDialog>
 #include <QFont>

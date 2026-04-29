@@ -3,6 +3,7 @@
 #include <climits>
 #include <sstream>
 #include <stdexcept>
+constexpr uint64_t SEQUENTIAL_EXTRA_STAGE_COST = 2;
 
 namespace
 {
@@ -1125,6 +1126,21 @@ void Simulator::stepSequentialCycle(bool cachesEnabled)
 
     case SeqState::Phase::EXECUTE:
     {
+        // Non-pipelined mode should still represent the instruction
+        // passing through the equivalent five stages one at a time.
+        //
+        // The existing sequential model already charges:
+        // - IF through the fetch request/wait
+        // - EX through this EXECUTE phase
+        // - MEM through memory wait for LW/SW
+        // - WB through WRITEBACK
+        //
+        // It was too optimistic for cache-only mode because it skipped
+        // the explicit decode/empty-stage overhead. This extra cost keeps
+        // non-pipeline timing fair against pipeline timing.
+
+        cycles_ += SEQUENTIAL_EXTRA_STAGE_COST;
+
         auto &inst = seq_.inst;
         if (inst.op == Opcode::HALT)
         {
@@ -1293,45 +1309,81 @@ std::string Simulator::step()
 
 std::string Simulator::run(uint64_t maxCycles)
 {
-    uint64_t start = cycles_;
+    uint64_t steps = 0;
 
-    while (!halted_ && !faulted_ && (cycles_ - start) < maxCycles)
+    while (!halted_ && !faulted_ && steps < maxCycles)
     {
-        step();
-        if (mode_ == ExecMode::NO_PIPE_NO_CACHE || mode_ == ExecMode::NO_PIPE_CACHE)
+        const std::string result = step();
+        ++steps;
+
+        if (result == "HALTED")
         {
-            if (seq_.phase == SeqState::Phase::HALTED)
-                break;
+            return "HALTED";
+        }
+
+        if (result == "FAULT")
+        {
+            return faultMessage_.empty() ? "FAULT" : ("FAULT: " + faultMessage_);
         }
     }
 
+    if (halted_)
+    {
+        return "HALTED";
+    }
+
     if (faulted_)
-        return "FAULT";
-    return halted_ ? "HALTED" : "Stopped at cycle limit";
+    {
+        return faultMessage_.empty() ? "FAULT" : ("FAULT: " + faultMessage_);
+    }
+
+    lastSummary_ = "Max cycle limit reached before HALT";
+    lastFlags_ = "LIMIT";
+
+    return "Max cycle limit reached before HALT. Increase maxCycles for large benchmarks.";
 }
 
 std::string Simulator::runUntilBreakpoint(uint64_t maxCycles)
 {
-    uint64_t start = cycles_;
+    uint64_t steps = 0;
 
-    while (!halted_ && !faulted_ && (cycles_ - start) < maxCycles)
+    while (!halted_ && !faulted_ && steps < maxCycles)
     {
-        if (breakpoints_.count(pc_))
+        if (breakpoints_.count(pc_) > 0 && steps > 0)
         {
-            lastSummary_ = "Breakpoint hit";
-            return "BREAKPOINT";
+            lastSummary_ = "Breakpoint reached at PC=" + std::to_string(pc_);
+            lastFlags_ = "BREAKPOINT";
+            return lastSummary_;
         }
-        step();
-        if (mode_ == ExecMode::NO_PIPE_NO_CACHE || mode_ == ExecMode::NO_PIPE_CACHE)
+
+        const std::string result = step();
+        ++steps;
+
+        if (result == "HALTED")
         {
-            if (seq_.phase == SeqState::Phase::HALTED)
-                break;
+            return "HALTED";
+        }
+
+        if (result == "FAULT")
+        {
+            return faultMessage_.empty() ? "FAULT" : ("FAULT: " + faultMessage_);
         }
     }
 
+    if (halted_)
+    {
+        return "HALTED";
+    }
+
     if (faulted_)
-        return "FAULT";
-    return halted_ ? "HALTED" : "Stopped at cycle limit";
+    {
+        return faultMessage_.empty() ? "FAULT" : ("FAULT: " + faultMessage_);
+    }
+
+    lastSummary_ = "Max cycle limit reached before breakpoint/HALT";
+    lastFlags_ = "LIMIT";
+
+    return "Max cycle limit reached before breakpoint/HALT.";
 }
 
 std::string Simulator::pipeToString(const PipeReg &p) const
